@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ventas · Viva Pizza Armenia</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f5f5f5; display: flex; justify-content: center; padding: 2rem 1rem; min-height: 100vh; }
+    .card { background: #fff; border-radius: 12px; padding: 2rem; width: 100%; max-width: 520px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #111; display: flex; align-items: center; gap: 8px; }
+    label { font-size: 13px; color: #666; display: block; margin-bottom: 6px; }
+    input[type="date"] { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+    input[type="date"]:focus { border-color: #888; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+    .accesos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .accesos button { font-size: 13px; padding: 5px 14px; border: 1px solid #ddd; border-radius: 20px; background: #fff; cursor: pointer; color: #333; }
+    .accesos button:hover { background: #f0f0f0; }
+    .btn-consultar { width: 100%; padding: 10px; background: #111; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; margin-bottom: 1.5rem; }
+    .btn-consultar:hover { background: #333; }
+    .btn-consultar:disabled { background: #aaa; cursor: not-allowed; }
+    .resultado { background: #f9f9f9; border-radius: 10px; padding: 1.25rem 1.5rem; display: none; }
+    .resultado .periodo { font-size: 13px; color: #888; margin-bottom: 4px; }
+    .resultado .total { font-size: 34px; font-weight: 600; color: #111; }
+    .estado { font-size: 13px; color: #888; margin-top: 0.75rem; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🍕 Ventas · Viva Pizza Armenia</h1>
+
+    <div class="grid">
+      <div>
+        <label>Desde</label>
+        <input type="date" id="from-date" />
+      </div>
+      <div>
+        <label>Hasta</label>
+        <input type="date" id="to-date" />
+      </div>
+    </div>
+
+    <div class="accesos">
+      <button onclick="setHoy()">Hoy</button>
+      <button onclick="setAyer()">Ayer</button>
+      <button onclick="setSemana()">Esta semana</button>
+      <button onclick="setMes()">Este mes</button>
+    </div>
+
+    <button class="btn-consultar" id="btn-consultar" onclick="consultar()">Consultar ventas</button>
+
+    <div class="resultado" id="resultado">
+      <p class="periodo" id="label-periodo"></p>
+      <p class="total" id="valor-total"></p>
+    </div>
+
+    <div class="estado" id="estado"></div>
+  </div>
+
+  <script>
+    const PROXY = 'https://vivapizza-proxy.onrender.com';
+    const fmt = n => new Intl.NumberFormat('es-SV', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n);
+    const fmtDate = s => new Date(s + 'T12:00:00').toLocaleDateString('es-SV', { day: 'numeric', month: 'long', year: 'numeric' });
+    const toISO = d => d.toISOString().slice(0, 10);
+
+    function addDays(iso, n) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return toISO(d); }
+    function hoy() { return toISO(new Date()); }
+    function ayer() { const d = new Date(); d.setDate(d.getDate() - 1); return toISO(d); }
+    function inicioSemana() { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return toISO(d); }
+    function inicioMes() { const d = new Date(); d.setDate(1); return toISO(d); }
+
+    function setHoy() { document.getElementById('from-date').value = hoy(); document.getElementById('to-date').value = hoy(); }
+    function setAyer() { document.getElementById('from-date').value = ayer(); document.getElementById('to-date').value = ayer(); }
+    function setSemana() { document.getElementById('from-date').value = inicioSemana(); document.getElementById('to-date').value = hoy(); }
+    function setMes() { document.getElementById('from-date').value = inicioMes(); document.getElementById('to-date').value = hoy(); }
+
+    setHoy();
+
+    async function consultar() {
+      const from = document.getElementById('from-date').value;
+      const to = document.getElementById('to-date').value;
+      const estado = document.getElementById('estado');
+      const resultado = document.getElementById('resultado');
+
+      if (!from || !to) { estado.textContent = 'Selecciona un rango de fechas.'; return; }
+      if (from > to) { estado.textContent = 'La fecha inicial no puede ser mayor a la final.'; return; }
+
+      estado.textContent = 'Consultando...';
+      resultado.style.display = 'none';
+      document.getElementById('btn-consultar').disabled = true;
+
+      try {
+        const toApi = addDays(to, 1);
+        const url = `${PROXY}/orden-trabajo/total?from=${from}&to=${toApi}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Error ' + res.status);
+        const data = await res.json();
+
+        document.getElementById('label-periodo').textContent =
+          from === to ? `Ventas del ${fmtDate(from)}` : `Ventas del ${fmtDate(from)} al ${fmtDate(to)}`;
+        document.getElementById('valor-total').textContent = fmt(data.total);
+        resultado.style.display = 'block';
+        estado.textContent = '';
+      } catch (e) {
+        estado.textContent = 'No se pudo conectar. Si es la primera consulta del día, espera 1 minuto e intenta de nuevo.';
+      } finally {
+        document.getElementById('btn-consultar').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
