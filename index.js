@@ -18,8 +18,8 @@ function addDays(iso, n) {
 }
 
 async function fetchTotal(base, from, to) {
-  const toApi = addDays(to, 1);
-  const r = await axios.get(`${base}/orden-trabajo/total`, { params: { from, to: toApi } });
+  // 'to' ya viene con +1 día aplicado desde el panel o desde el agrupador interno
+  const r = await axios.get(`${base}/orden-trabajo/total`, { params: { from, to } });
   return r.data.total ?? 0;
 }
 
@@ -35,8 +35,9 @@ function makeTotalRoute(sucursal) {
   return async (req, res) => {
     try {
       const { from, to } = req.query;
-      const total = await fetchTotal(APIS[sucursal], from, to);
-      res.json({ total });
+      // 'to' ya viene con +1 día desde el panel (rango exclusivo)
+      const r = await axios.get(`${APIS[sucursal]}/orden-trabajo/total`, { params: { from, to } });
+      res.json({ total: r.data.total ?? 0 });
     } catch (e) {
       res.status(500).json({ error: `Error consultando ${sucursal}` });
     }
@@ -59,10 +60,9 @@ function makeVentasRoute(sucursal) {
       let puntos = [];
 
       if (agrupacion === 'diario') {
-        // Un punto por día entre from y to
         let cur = from;
         while (cur <= to) {
-          const total = await fetchTotal(base, cur, cur);
+          const total = await fetchTotal(base, cur, addDays(cur, 1));
           puntos.push({ label: cur, total });
           cur = addDays(cur, 1);
         }
@@ -78,7 +78,7 @@ function makeVentasRoute(sucursal) {
           cur = addDays(cur, 1);
         }
         for (const [semana, rango] of Object.entries(semanas)) {
-          const total = await fetchTotal(base, rango.from, rango.to);
+          const total = await fetchTotal(base, rango.from, addDays(rango.to, 1));
           puntos.push({ label: semana, total });
         }
 
@@ -90,7 +90,7 @@ function makeVentasRoute(sucursal) {
           const lastDay = new Date(y, m, 0).getDate();
           const f = `${y}-${mm}-01`;
           const t = `${y}-${mm}-${lastDay}`;
-          const total = await fetchTotal(base, f, t);
+          const total = await fetchTotal(base, f, addDays(t, 1));
           puntos.push({ label: `${y}-${mm}`, total });
         }
 
@@ -99,7 +99,7 @@ function makeVentasRoute(sucursal) {
         const yFrom = parseInt((from || `${new Date().getFullYear() - 2}-01-01`).slice(0, 4));
         const yTo   = parseInt((to   || `${new Date().getFullYear()}-12-31`).slice(0, 4));
         for (let y = yFrom; y <= yTo; y++) {
-          const total = await fetchTotal(base, `${y}-01-01`, `${y}-12-31`);
+          const total = await fetchTotal(base, `${y}-01-01`, `${y+1}-01-01`);
           puntos.push({ label: `${y}`, total });
         }
       } else {
