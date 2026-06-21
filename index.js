@@ -133,5 +133,45 @@ function makeListaRoute(sucursal) {
 app.get('/armenia/orden-trabajo/lista', makeListaRoute('armenia'));
 app.get('/izalco/orden-trabajo/lista',  makeListaRoute('izalco'));
 
+// ── Análisis IA ────────────────────────────────────────────────────────────
+app.post('/ia/analisis-tipos', express.json(), async (req, res) => {
+  try {
+    const { sucursal, periodo, totalCantidad, totalMonto, resumen } = req.body;
+
+    const prompt = `Eres un analista de negocio experto en restaurantes y pizzerías. Analiza estos datos de ventas de Viva Pizza sucursal ${sucursal} para el período ${periodo}:
+
+Total de órdenes: ${totalCantidad}
+Monto total: ${totalMonto}
+
+Desglose por tipo de orden:
+${resumen}
+
+Escribe un análisis breve (3-4 párrafos) en español con:
+1. Qué tipo de orden domina y qué significa para el negocio
+2. Oportunidades o alertas que ves en la distribución
+3. Una recomendación concreta para el dueño
+
+Sé directo, práctico y enfocado en acciones. No uses bullet points, escribe en párrafos.`;
+
+    const iaRes = await axios.post('https://api.anthropic.com/v1/messages', {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    }, {
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const texto = iaRes.data.content?.[0]?.text || 'No se pudo generar el análisis.';
+    res.json({ texto });
+  } catch (e) {
+    console.error('IA error:', e.message);
+    res.status(500).json({ error: 'Error generando análisis: ' + e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Proxy corriendo en puerto ${PORT}`));
