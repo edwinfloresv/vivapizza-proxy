@@ -117,5 +117,21 @@ function makeVentasRoute(sucursal) {
 app.get('/armenia/ventas', makeVentasRoute('armenia'));
 app.get('/izalco/ventas',  makeVentasRoute('izalco'));
 
+// ── Lista de órdenes ───────────────────────────────────────────────────────
+function makeListaRoute(sucursal) {
+  return async (req, res) => {
+    try {
+      const { from, to } = req.query;
+      const r = await axios.get(`${APIS[sucursal]}/orden-trabajo/lista`, { params: { from, to } });
+      res.json(r.data);
+    } catch (e) {
+      res.status(500).json({ error: `Error consultando lista ${sucursal}: ${e.message}` });
+    }
+  };
+}
+
+app.get('/armenia/orden-trabajo/lista', makeListaRoute('armenia'));
+app.get('/izalco/orden-trabajo/lista',  makeListaRoute('izalco'));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Proxy corriendo en puerto ${PORT}`));
