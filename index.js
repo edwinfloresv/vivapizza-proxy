@@ -173,5 +173,48 @@ Sé directo, práctico y enfocado en acciones. No uses bullet points, escribe en
   }
 });
 
+// ── Chat estratégico ───────────────────────────────────────────────────────
+app.post('/ia/chat', express.json(), async (req, res) => {
+  try {
+    const { mensajes, contexto } = req.body;
+    // mensajes: [{role:'user'|'assistant', content:'...'}]
+    // contexto: resumen de datos de ventas
+
+    const systemPrompt = `Eres un consultor de negocios experto en restaurantes y pizzerías en El Salvador. 
+Estás ayudando al dueño de Viva Pizza a analizar sus ventas y diseñar estrategias.
+
+Estos son los datos actuales de ventas analizados:
+${contexto}
+
+Tu rol es:
+- Validar o cuestionar las estrategias que proponga el dueño
+- Dar opiniones directas y prácticas basadas en los datos
+- Hacer preguntas que ayuden a refinar las ideas
+- Ayudar a construir un plan de acción concreto
+- Ser honesto si algo no parece viable
+
+Responde de forma conversacional, en español, sin bullet points excesivos. Sé directo y enfocado en el negocio.`;
+
+    const iaRes = await axios.post('https://api.anthropic.com/v1/messages', {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: mensajes
+    }, {
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const texto = iaRes.data.content?.[0]?.text || 'Sin respuesta.';
+    res.json({ texto });
+  } catch (e) {
+    console.error('Chat IA error:', e.message);
+    res.status(500).json({ error: 'Error en el chat: ' + e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Proxy corriendo en puerto ${PORT}`));
